@@ -36,13 +36,13 @@ module.exports = ({commandRegistry, commandInstaller, config, notificationManage
       'application:new-file': -> ipcRenderer.send('command', 'application:new-file')
       'application:open': ->
         defaultPath = atom.workspace.getActiveTextEditor()?.getPath() ? atom.project.getPaths()?[0]
-        ipcRenderer.send('open-command', 'application:open', defaultPath)
+        ipcRenderer.send('open-chosen-any', defaultPath)
       'application:open-file': ->
         defaultPath = atom.workspace.getActiveTextEditor()?.getPath() ? atom.project.getPaths()?[0]
-        ipcRenderer.send('open-command', 'application:open-file', defaultPath)
+        ipcRenderer.send('open-chosen-file', defaultPath)
       'application:open-folder': ->
         defaultPath = atom.workspace.getActiveTextEditor()?.getPath() ? atom.project.getPaths()?[0]
-        ipcRenderer.send('open-command', 'application:open-folder', defaultPath)
+        ipcRenderer.send('open-chosen-folder', defaultPath)
       'application:open-dev': -> ipcRenderer.send('command', 'application:open-dev')
       'application:open-safe': -> ipcRenderer.send('command', 'application:open-safe')
       'application:add-project-folder': -> atom.addProjectFolder()
@@ -122,8 +122,6 @@ module.exports = ({commandRegistry, commandInstaller, config, notificationManage
   commandRegistry.add(
     'atom-text-editor',
     stopEventPropagation({
-      'core:undo': -> @undo()
-      'core:redo': -> @redo()
       'core:move-left': -> @moveLeft()
       'core:move-right': -> @moveRight()
       'core:select-left': -> @selectLeft()
@@ -160,6 +158,17 @@ module.exports = ({commandRegistry, commandInstaller, config, notificationManage
       'editor:select-to-previous-subword-boundary': -> @selectToPreviousSubwordBoundary()
       'editor:select-to-first-character-of-line': -> @selectToFirstCharacterOfLine()
       'editor:select-line': -> @selectLinesContainingCursors()
+      'editor:select-larger-syntax-node': -> @selectLargerSyntaxNode()
+      'editor:select-smaller-syntax-node': -> @selectSmallerSyntaxNode()
+    }),
+    false
+  )
+
+  commandRegistry.add(
+    'atom-text-editor:not([readonly])',
+    stopEventPropagation({
+      'core:undo': -> @undo()
+      'core:redo': -> @redo()
     }),
     false
   )
@@ -169,11 +178,27 @@ module.exports = ({commandRegistry, commandInstaller, config, notificationManage
     stopEventPropagationAndGroupUndo(
       config,
       {
+        'core:copy': -> @copySelectedText()
+        'editor:copy-selection': -> @copyOnlySelectedText()
+      }
+    ),
+    false
+  )
+
+  commandRegistry.add(
+    'atom-text-editor:not([readonly])',
+    stopEventPropagationAndGroupUndo(
+      config,
+      {
         'core:backspace': -> @backspace()
         'core:delete': -> @delete()
         'core:cut': -> @cutSelectedText()
-        'core:copy': -> @copySelectedText()
         'core:paste': -> @pasteText()
+        'editor:paste-without-reformatting': -> @pasteText({
+          normalizeLineEndings: false,
+          autoIndent: false,
+          preserveTrailingLineIndentation: true
+        })
         'editor:delete-to-previous-word-boundary': -> @deleteToPreviousWordBoundary()
         'editor:delete-to-next-word-boundary': -> @deleteToNextWordBoundary()
         'editor:delete-to-beginning-of-word': -> @deleteToBeginningOfWord()
@@ -188,7 +213,6 @@ module.exports = ({commandRegistry, commandInstaller, config, notificationManage
         'editor:transpose': -> @transpose()
         'editor:upper-case': -> @upperCase()
         'editor:lower-case': -> @lowerCase()
-        'editor:copy-selection': -> @copyOnlySelectedText()
       }
     ),
     false
@@ -214,19 +238,42 @@ module.exports = ({commandRegistry, commandInstaller, config, notificationManage
       'editor:toggle-soft-wrap': -> @toggleSoftWrapped()
       'editor:fold-all': -> @foldAll()
       'editor:unfold-all': -> @unfoldAll()
-      'editor:fold-current-row': -> @foldCurrentRow()
-      'editor:unfold-current-row': -> @unfoldCurrentRow()
+      'editor:fold-current-row': ->
+        @foldCurrentRow()
+        @scrollToCursorPosition()
+      'editor:unfold-current-row': ->
+        @unfoldCurrentRow()
+        @scrollToCursorPosition()
       'editor:fold-selection': -> @foldSelectedLines()
-      'editor:fold-at-indent-level-1': -> @foldAllAtIndentLevel(0)
-      'editor:fold-at-indent-level-2': -> @foldAllAtIndentLevel(1)
-      'editor:fold-at-indent-level-3': -> @foldAllAtIndentLevel(2)
-      'editor:fold-at-indent-level-4': -> @foldAllAtIndentLevel(3)
-      'editor:fold-at-indent-level-5': -> @foldAllAtIndentLevel(4)
-      'editor:fold-at-indent-level-6': -> @foldAllAtIndentLevel(5)
-      'editor:fold-at-indent-level-7': -> @foldAllAtIndentLevel(6)
-      'editor:fold-at-indent-level-8': -> @foldAllAtIndentLevel(7)
-      'editor:fold-at-indent-level-9': -> @foldAllAtIndentLevel(8)
+      'editor:fold-at-indent-level-1': ->
+        @foldAllAtIndentLevel(0)
+        @scrollToCursorPosition()
+      'editor:fold-at-indent-level-2': ->
+        @foldAllAtIndentLevel(1)
+        @scrollToCursorPosition()
+      'editor:fold-at-indent-level-3': ->
+        @foldAllAtIndentLevel(2)
+        @scrollToCursorPosition()
+      'editor:fold-at-indent-level-4': ->
+        @foldAllAtIndentLevel(3)
+        @scrollToCursorPosition()
+      'editor:fold-at-indent-level-5': ->
+        @foldAllAtIndentLevel(4)
+        @scrollToCursorPosition()
+      'editor:fold-at-indent-level-6': ->
+        @foldAllAtIndentLevel(5)
+        @scrollToCursorPosition()
+      'editor:fold-at-indent-level-7': ->
+        @foldAllAtIndentLevel(6)
+        @scrollToCursorPosition()
+      'editor:fold-at-indent-level-8': ->
+        @foldAllAtIndentLevel(7)
+        @scrollToCursorPosition()
+      'editor:fold-at-indent-level-9': ->
+        @foldAllAtIndentLevel(8)
+        @scrollToCursorPosition()
       'editor:log-cursor-scope': -> showCursorScope(@getCursorScope(), notificationManager)
+      'editor:log-cursor-syntax-tree-scope': -> showSyntaxTree(@getCursorSyntaxTreeScope(), notificationManager)
       'editor:copy-path': -> copyPathToClipboard(this, project, clipboard, false)
       'editor:copy-project-path': -> copyPathToClipboard(this, project, clipboard, true)
       'editor:toggle-indent-guide': -> config.set('editor.showIndentGuide', not config.get('editor.showIndentGuide'))
@@ -237,7 +284,7 @@ module.exports = ({commandRegistry, commandInstaller, config, notificationManage
   )
 
   commandRegistry.add(
-    'atom-text-editor:not([mini])',
+    'atom-text-editor:not([mini]):not([readonly])',
     stopEventPropagationAndGroupUndo(
       config,
       {
@@ -285,6 +332,13 @@ showCursorScope = (descriptor, notificationManager) ->
   list = descriptor.scopes.toString().split(',')
   list = list.map (item) -> "* #{item}"
   content = "Scopes at Cursor\n#{list.join('\n')}"
+
+  notificationManager.addInfo(content, dismissable: true)
+
+showSyntaxTree = (descriptor, notificationManager) ->
+  list = descriptor.scopes.toString().split(',')
+  list = list.map (item) -> "* #{item}"
+  content = "Syntax tree at Cursor\n#{list.join('\n')}"
 
   notificationManager.addInfo(content, dismissable: true)
 

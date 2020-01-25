@@ -4,9 +4,9 @@ ThemePackage = require '../src/theme-package'
 {mockLocalStorage} = require './spec-helper'
 
 describe "Package", ->
-  build = (constructor, path) ->
+  build = (constructor, packagePath) ->
     new constructor(
-      path: path, packageManager: atom.packages, config: atom.config,
+      path: packagePath, packageManager: atom.packages, config: atom.config,
       styleManager: atom.styles, notificationManager: atom.notifications,
       keymapManager: atom.keymaps, commandRegistry: atom.command,
       grammarRegistry: atom.grammars, themeManager: atom.themes,
@@ -138,7 +138,8 @@ describe "Package", ->
       jasmine.attachToDOM(editorElement)
 
     afterEach ->
-      theme.deactivate() if theme?
+      waitsForPromise ->
+        Promise.resolve(theme.deactivate()) if theme?
 
     describe "when the theme contains a single style file", ->
       it "loads and applies css", ->
@@ -200,8 +201,10 @@ describe "Package", ->
 
       it "deactivated event fires on .deactivate()", ->
         theme.onDidDeactivate spy = jasmine.createSpy()
-        theme.deactivate()
-        expect(spy).toHaveBeenCalled()
+        waitsForPromise ->
+          Promise.resolve(theme.deactivate())
+        runs ->
+          expect(spy).toHaveBeenCalled()
 
   describe ".loadMetadata()", ->
     [packagePath, metadata] = []
