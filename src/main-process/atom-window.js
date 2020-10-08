@@ -47,8 +47,11 @@ module.exports = class AtomWindow extends EventEmitter {
         // Disable the `auxclick` feature so that `click` events are triggered in
         // response to a middle-click.
         // (Ref: https://github.com/atom/atom/pull/12696#issuecomment-290496960)
-        disableBlinkFeatures: 'Auxclick'
-      }
+        disableBlinkFeatures: 'Auxclick',
+        nodeIntegration: true,
+        webviewTag: true
+      },
+      simpleFullscreen: this.getSimpleFullscreen()
     };
 
     // Don't set icon on Windows so the exe's ico will be used as window and
@@ -362,6 +365,10 @@ module.exports = class AtomWindow extends EventEmitter {
     return { x, y, width, height };
   }
 
+  getSimpleFullscreen() {
+    return this.atomApplication.config.get('core.simpleFullScreenWindows');
+  }
+
   shouldAddCustomTitleBar() {
     return (
       !this.isSpec &&
@@ -381,7 +388,6 @@ module.exports = class AtomWindow extends EventEmitter {
   shouldHideTitleBar() {
     return (
       !this.isSpec &&
-      process.platform === 'darwin' &&
       this.atomApplication.config.get('core.titleBar') === 'hidden'
     );
   }

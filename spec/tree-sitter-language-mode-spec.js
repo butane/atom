@@ -73,6 +73,58 @@ describe('TreeSitterLanguageMode', () => {
       ]);
     });
 
+    it('provides the grammar with the text of leaf nodes only', async () => {
+      const grammar = new TreeSitterGrammar(atom.grammars, jsGrammarPath, {
+        parser: 'tree-sitter-javascript',
+        scopes: {
+          program: 'source',
+          'call_expression > identifier': 'function',
+          property_identifier: 'property',
+          'call_expression > member_expression > property_identifier': 'method'
+        }
+      });
+      const original = grammar.idForScope.bind(grammar);
+      let tokens = [];
+      grammar.idForScope = function(scope, text) {
+        if (text && tokens[tokens.length - 1] !== text) {
+          tokens.push(text);
+        }
+        return original(scope, text);
+      };
+
+      buffer.setText('aa.bbb = cc(d.eee());');
+
+      const languageMode = new TreeSitterLanguageMode({ buffer, grammar });
+      buffer.setLanguageMode(languageMode);
+
+      expectTokensToEqual(editor, [
+        [
+          { text: 'aa.', scopes: ['source'] },
+          { text: 'bbb', scopes: ['source', 'property'] },
+          { text: ' = ', scopes: ['source'] },
+          { text: 'cc', scopes: ['source', 'function'] },
+          { text: '(d.', scopes: ['source'] },
+          { text: 'eee', scopes: ['source', 'method'] },
+          { text: '());', scopes: ['source'] }
+        ]
+      ]);
+
+      expect(tokens).toEqual([
+        'aa',
+        '.',
+        'bbb',
+        '=',
+        'cc',
+        '(',
+        'd',
+        '.',
+        'eee',
+        '(',
+        ')',
+        ';'
+      ]);
+    });
+
     it('can start or end multiple scopes at the same position', async () => {
       const grammar = new TreeSitterGrammar(atom.grammars, jsGrammarPath, {
         parser: 'tree-sitter-javascript',
@@ -149,7 +201,10 @@ describe('TreeSitterLanguageMode', () => {
         languageMode.tree.rootNode
           .descendantForPosition(Point(1, 2), Point(1, 6))
           .toString()
-      ).toBe('(declaration (primitive_type) (identifier) (MISSING ";"))');
+      ).toBe(
+        '(declaration type: (primitive_type)' +
+          ' declarator: (identifier) (MISSING ";"))'
+      );
 
       expectTokensToEqual(editor, [
         [
@@ -1513,11 +1568,11 @@ describe('TreeSitterLanguageMode', () => {
       buffer.setLanguageMode(languageMode);
 
       expect(languageMode.tree.rootNode.toString()).toBe(
-        '(program (if (identifier) (then ' +
+        '(program (if condition: (identifier) consequence: (then ' +
           '(identifier)) ' +
-          '(elsif (identifier) (then ' +
+          'alternative: (elsif condition: (identifier) consequence: (then ' +
           '(identifier)) ' +
-          '(else ' +
+          'alternative: (else ' +
           '(identifier)))))'
       );
 
@@ -1931,8 +1986,8 @@ describe('TreeSitterLanguageMode', () => {
         'fragment',
         'element',
         'script_element',
-        'raw_text',
         'program',
+        'raw_text',
         'expression_statement',
         'call_expression',
         'template_string',
